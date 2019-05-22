@@ -162,14 +162,6 @@ export default {
     this.todos.forEach(item => {
       item.isShow = true;
     });
-    this.todos.push({
-      content: "時空旅人",
-      createTime: 1558055916,
-      editable: false,
-      completed: false,
-      isShow: true,
-      isEdit: false
-    });
     this.saveData();
   },
   methods: {
