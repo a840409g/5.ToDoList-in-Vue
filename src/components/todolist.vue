@@ -2,7 +2,7 @@
   <div id="todo">
     <h1>To Do List</h1>
     <input
-      @keyup.enter="getTodos(newTodo)"
+      @keyup.enter="getTodos(newTodo,$event)"
       type="text"
       class="getTodo form-control"
       placeholder="請輸入待辦事項..."
@@ -28,13 +28,14 @@
       >展開工具列</button>
       <div class="dropdown-menu" aria-labelledby="dropdownMenuButton">
         <a
-          v-for="list in toolsList"
-          @click.prevent="arrange($event)"
-          :data-st="list.st"
-          :class="{ selected: list.selected}"
+          v-for="(list,id) in toolsList"
+          @click.prevent="arrange(id),selected = id"
+          :class="{ selected: id == selected}"
           class="dropdown-item"
           href="#"
         >{{list.text}}</a>
+        <!-- 點到哪個選項時會判斷id是哪一個,而 arrange 會更改 selected 的值。 -->
+        <!-- 當id 和 selected相等時也就是true,所以class就會綁上去。 -->
       </div>
     </div>
     <div class="showBox">
@@ -53,7 +54,7 @@
     <ul class="todo_ul list-group">
       <li
         v-for="(todo,id) in showTodo"
-        @click.self="todo.completed = !todo.completed,saveData()"
+        @click.self="copmplete(todo),saveData()"
         :class="todo.completed ? 'checked':'none'"
         class="lists list-group-item"
         v-show="condition == 0 || (condition == 1 && todo.completed == true)||(condition == 2 && todo.completed == false)"
@@ -91,31 +92,15 @@
 </template>
 
 <script>
+import { mapState, mapGetters, mapActions, mapMutations } from "vuex";
 export default {
   name: "todolist",
   data() {
     return {
-      todos: JSON.parse(localStorage.getItem("todolist")) || [],
       newTodo: "",
       filterText: "",
       condition: 0,
-      toolsList: [
-        {
-          st: "recentCreateTime",
-          text: "依建立時間(近到遠)",
-          selected: false
-        },
-        {
-          st: "pastCreateTime",
-          text: "依建立時間(遠到近)",
-          selected: false
-        },
-        {
-          st: "editTime",
-          text: "最後編輯排序",
-          selected: false
-        }
-      ],
+      selected: 0,
       showList: [
         {
           id: "all",
@@ -151,6 +136,11 @@ export default {
     };
   },
   computed: {
+    ...mapGetters({
+      todos: "importTodos",
+      toolsList: "importToolsList"
+    }),
+    // 引入store的todo,後面有關原本todolist的操作都改成這個。
     showTodo() {
       return this.todos.filter(todos => {
         return todos.isShow;
@@ -159,51 +149,39 @@ export default {
     // vue的官方文件提到,v-for和v-if得避免放在同個tag,因此在這利用computed在每次有更新時計算一次過濾掉不符合條件,達到v-if的功能。
   },
   created() {
-    this.todos.forEach(item => {
-      item.isShow = true;
-    });
-    this.saveData();
+    // this.saveData();
   },
   methods: {
+    ...mapMutations(["removeTodo", "dltBtn","arrange"]),
     saveData() {
-      localStorage.setItem("todolist", JSON.stringify(this.todos));
+      localStorage.setItem(
+        "todolist",
+        JSON.stringify(this.$store.state.storeTodos)
+      );
     },
-    getTodos(todo) {
+    getTodos(todo,e) {
       if (this.newTodo.length == 0) {
         return;
       }
-      let createStamp = Math.floor(new Date().getTime() / 1);
-      // 創立一個時間戳
-      this.todos.unshift({
-        content: todo,
-        createTime: createStamp,
-        editable: false,
-        completed: false,
-        isShow: true,
-        editTime: createStamp,
-        isEdit: false
-      });
+      this.$store.commit("todosToState", todo);
       // unshift,push的相反
       this.reset();
-      this.saveData();
       // 更新localStorage的資料
       this.newTodo = "";
     },
-    removeTodo: function(id) {
-      this.todos = this.todos
-        .slice(0, id)
-        .concat(this.todos.slice(id + 1, this.todos.length));
-      // 不是直接去掉某一項,而是將欲刪除的項目作基準點將前後的物件接起來形成新的陣列
-      // this.todos.splice(id, 1);
-      this.saveData();
-    },
-    // 刪除想刪除的事項,參數是要讓瀏覽器知道要刪除哪一個項目
     update(todo) {
       let createEditStamp = Math.floor(new Date().getTime() / 1);
       todo.editTime = createEditStamp;
       // 編輯當下產生timeStamp並記錄在編輯時間內,後面如法炮製讀取edit的時間戳產生編輯時間
       todo.isEdit = true;
       todo.editable = false;
+      this.saveData();
+    },
+      copmplete(todo) {
+      let createDoneStamp = Math.floor(new Date().getTime() / 1);
+      todo.doneTime = createDoneStamp;
+      // 編輯當下產生timeStamp並記錄在編輯時間內,後面如法炮製讀取edit的時間戳產生編輯時間
+      todo.completed = !todo.completed;
       this.saveData();
     },
     filter() {
@@ -254,55 +232,6 @@ export default {
       this.filterText = "";
     },
     // 清除過濾器的文字回到使用過濾器前的狀態
-    arrange(e) {
-      let st = e.target.dataset.st;
-      let todos = this.todos;
-      for (let list of this.toolsList) {
-        let isValid = false;
-        switch (st) {
-          case "recentCreateTime":
-            if (list.st == "recentCreateTime") {
-              isValid = true;
-            }
-            todos.sort(function(a, b) {
-              return b.createTime - a.createTime;
-            });
-            break;
-          case "pastCreateTime":
-            if (list.st == "pastCreateTime") {
-              isValid = true;
-            }
-            todos.sort(function(a, b) {
-              return a.createTime - b.createTime;
-            });
-            break;
-          case "editTime":
-            if (list.st == "editTime") {
-              isValid = true;
-            }
-            todos.sort(function(a, b) {
-              return b.editTime - a.editTime;
-            });
-            break;
-        }
-        // 用filter一樣的做法去更動toolsList的selected,並用if去判斷是改哪一項,讓:class知道哪一項的selected是true進而掛上想要的class
-        list.selected = isValid;
-      }
-      // 越近的時間timeStamp越大,所以能透過timeStamp用sort做排序。
-
-    },
-    dltBtn() {
-      let temArry = [];
-      for (let value of this.todos) {
-        if (!value.completed) {
-          temArry.push(value);
-        }
-      }
-      this.todos = temArry;
-      // immutable的概念,不對原本陣列做改動,而是將依照條件過濾出的的陣列去取代
-      // 這裡將合乎條件,也就是未完成的的推進一個暫存區,之後取代原本陣列的就是沒有 completed==true 的陣列
-      this.saveData();
-    },
     reset() {
       let todos = this.todos;
       todos.forEach(item => {
@@ -323,23 +252,6 @@ export default {
 
 <!-- Add "scoped" attribute to limit CSS to this component only -->
 <style scoped>
-* {
-  font-family: "Baloo Bhai", cursive;
-  font-family: "Source Code Pro", monospace;
-}
-a {
-  text-decoration: none;
-}
-.checked {
-  text-decoration: line-through !important;
-  background-color: #037bff !important;
-  color: #fff;
-}
-.selected {
-  background-color: #037bff !important;
-  color: #fff;
-}
-
 #todo {
   display: flex;
   align-items: center;
@@ -349,11 +261,7 @@ a {
   width: 1000px;
   height: 600px;
 }
-.lists .num,
-.things,
-.date {
-  padding: 0 10px;
-}
+
 .getTodo,
 .filter {
   text-align: center;
@@ -400,34 +308,12 @@ a {
   margin-right: 20px;
 }
 
-.todo_ul {
-  width: 80%;
-  height: 70%;
-  overflow: scroll;
-}
-ul li:nth-child(even) {
-  background-color: #bee5eb;
-}
-.lists {
-  width: 100%;
-}
 .checkbox {
   display: inline-block;
   width: 17px;
   height: 15px;
   line-height: 10px;
   text-align: center;
-}
-.fas,
-.fa-pen {
-  font-family: "Font Awesome 5 Free";
-  font-size: 12px;
-}
-.parts {
-  display: flex;
-  position: absolute;
-  right: 10px;
-  top: 25%;
 }
 .editTime {
   font-size: 12px;
