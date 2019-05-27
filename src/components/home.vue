@@ -9,7 +9,7 @@
       <ul :class="{showul:showPanel == true }" class="todo_ul list-group">
         <router-link to="/todolist">
           <li @click="arrange(0),DoneOrEdit($event)" class="lists list-group-item">
-            <span class="things">最近新增:{{recentTodo[0].content}}</span>
+            <span class="things">最近新增:{{(recentTodo.length > 0)? recentTodo[0].content:" "}}</span>
           </li>
         </router-link>
         <router-link to="/todolist">
